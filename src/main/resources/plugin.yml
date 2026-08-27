@@ -1,0 +1,31 @@
+name: NexusSecurity
+version: '${project.version}'
+main: nx.zsanchez.nexussecurity.NexusSecurity
+api-version: '1.21'
+description: Professional multilayer security platform for Minecraft servers
+author: NexusSecurity Team
+website: https://nexussecurity.io
+load: STARTUP
+
+softdepend: []
+
+commands:
+  security:
+    description: Main NexusSecurity command
+    usage: /security <subcommand> [args]
+    permission: nexussecurity.admin
+    aliases: [sec, ns]
+
+permissions:
+  nexussecurity.admin:
+    description: Full administrative access to NexusSecurity
+    default: op
+  nexussecurity.alerts:
+    description: Receive security alerts in-game
+    default: op
+  nexussecurity.bypass:
+    description: Bypass Shield and HackDetector checks
+    default: false
+  nexussecurity.status:
+    description: View security status
+    default: op

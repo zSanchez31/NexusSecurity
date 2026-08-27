@@ -1,0 +1,557 @@
+# ==============================================================================
+#                     NexusSecurity — Configuración Principal
+#              Plugin Profesional de Seguridad Multicapa para Minecraft
+#                            Versión: 1.1.4
+# ==============================================================================
+# INSTRUCCIONES:
+#   1. Introduce tu clave API en el campo 'api-key' para activar todas las funciones.
+#   2. Sin clave API válida, el plugin opera en modo LIMITADO (solo logs básicos).
+#   3. La suscripción se renueva automáticamente cada 30 días.
+#   4. Se te notificará 7 días antes de la expiración.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# SECCIÓN: API Y SUSCRIPCIÓN (OBLIGATORIO)
+# ------------------------------------------------------------------------------
+api:
+  # Tu clave API única. Obtenerla en https://nexussecurity.io/dashboard
+  # Sin clave válida, el plugin entra en modo limitado automáticamente.
+  key: "TU_CLAVE_API_AQUI"
+
+  # Endpoint del servidor de validación. No modificar salvo indicación de soporte.
+  validation-endpoint: "https://api.nexussecurity.io/v1/validate"
+
+  # Segundos de espera para solicitudes al servidor de API (timeout)
+  timeout-seconds: 10
+
+  # Número de reintentos si la validación falla por conectividad
+  max-retries: 3
+
+  # Horas de período de gracia si el servidor API no está disponible
+  # El plugin mantendrá las funciones activas durante este período sin conectividad
+  grace-period-hours: 72
+
+  # Intervalo en horas para re-validar la suscripción (mínimo: 24)
+  revalidation-interval-hours: 24
+
+# ------------------------------------------------------------------------------
+# SECCIÓN: BASE DE DATOS
+# ------------------------------------------------------------------------------
+database:
+  # Tipo de base de datos: sqlite, mysql, postgresql
+  type: sqlite
+
+  # SQLite: Ruta del archivo de base de datos (relativa al directorio del plugin)
+  sqlite-file: "nexussecurity.db"
+
+  # MySQL/PostgreSQL (solo si type != sqlite):
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "nexussecurity"
+    username: "nexussecurity"
+    password: "change_this_password"
+    # Pool de conexiones HikariCP
+    pool-size: 10
+    connection-timeout-ms: 30000
+    idle-timeout-ms: 600000
+    max-lifetime-ms: 1800000
+    # SSL para conexiones seguras a BD
+    ssl: false
+
+  # Días de retención de logs/eventos antes de purga automática
+  log-retention-days: 90
+
+  # Intervalo en horas para ejecutar la purga de datos antiguos
+  purge-interval-hours: 24
+
+# ------------------------------------------------------------------------------
+# SECCIÓN: OPTIMIZACIÓN DE RENDIMIENTO
+# ------------------------------------------------------------------------------
+performance:
+  # Umbral de TPS por debajo del cual se reducen las operaciones de análisis
+  # El servidor Paper tiene 20 TPS normalmente. Recomendado: 17-18
+  tps-threshold: 17.0
+
+  # Porcentaje máximo de CPU permitido para NexusSecurity antes de reducir actividad
+  # 0 = sin límite (no recomendado). Rango: 0-100
+  max-cpu-percent: 15
+
+  # Megabytes máximos de RAM adicional permitidos para NexusSecurity
+  max-ram-mb: 512
+
+  # --- Desactivación automática de módulos por rendimiento ---
+  auto-disable:
+    # Desactivar automáticamente módulos no críticos cuando el servidor está sobrecargado
+    enabled: true
+    # Puntuación de uso de recursos mínima (0.0-1.0) para considerar desactivar un módulo
+    module-score-threshold: 0.5
+    # Módulos que nunca se desactivan automáticamente (nombres en minúsculas con guiones)
+    excluded-modules:
+      - "shield"
+      - "integrity"
+      - "hack-detector"
+      - "guardian"
+    # Re-activar los módulos desactivados cuando el rendimiento se recupera
+    re-enable-on-recovery: true
+    # Enfriamiento en minutos entre acciones de auto-disable/re-enable
+    cooldown-minutes: 10
+
+  # Tamaño del pool de threads para operaciones asíncronas
+  thread-pool-size: 4
+
+  # Tamaño del batch de escritura de eventos/logs a base de datos
+  # Escrituras se agrupan y se persisten cada 'batch-flush-interval-ms' ms
+  batch-size: 100
+  batch-flush-interval-ms: 5000
+
+  # TTL en segundos para caché de reputación de IPs
+  ip-cache-ttl-seconds: 1800
+
+  # TTL en segundos para caché de hashes de archivos
+  file-hash-cache-ttl-seconds: 300
+
+  # Tamaño máximo de la caché de IPs (entradas)
+  ip-cache-max-size: 10000
+
+  # --- Monitor de memoria JVM (MemoryWatchdog) ---
+  # Vigila el uso de heap y la actividad de GC, emitiendo alertas WARNING/CRITICAL
+  # por niveles (con histéresis para evitar spam) y solicitando GC en estado crítico.
+  memory-watchdog:
+    # Activar el monitor de memoria proactivo
+    enabled: true
+    # Porcentaje de heap usado para alerta WARNING
+    warn-percent: 80.0
+    # Porcentaje de heap usado para alerta CRITICAL
+    critical-percent: 92.0
+    # Solicitar System.gc() automáticamente en estado CRÍTICO (con enfriamiento)
+    gc-on-critical: true
+    # Enfriamiento en minutos entre solicitudes de GC automático
+    gc-cooldown-minutes: 15
+    # Intervalo en segundos entre muestreos de memoria
+    check-interval-seconds: 15
+
+# ------------------------------------------------------------------------------
+# MÓDULO 1: SHIELD — Firewall y Protección Perimetral
+# ------------------------------------------------------------------------------
+modules:
+  shield:
+    enabled: true
+
+    # Lista blanca de IPs que nunca serán bloqueadas
+    whitelist:
+      - "127.0.0.1"
+      - "localhost"
+    # Ejemplo: - "192.168.1.100"
+
+    # Lista negra manual de IPs siempre bloqueadas
+    blacklist: []
+    # Ejemplo: - "1.2.3.4"
+
+    # --- AntiVPN ---
+    anti-vpn:
+      enabled: true
+      # Sensibilidad: low, medium, high, extreme
+      # low: Solo bloquea proxies conocidos con alta certeza
+      # medium: Bloquea VPNs y proxies con certeza media-alta
+      # high: Bloquea cualquier IP con indicadores de anonimización
+      # extreme: Bloquea incluso IPs con mínimos indicadores VPN (más falsos positivos)
+      sensitivity: medium
+      # Acción al detectar VPN: kick, ban, flag (solo registra)
+      action: kick
+      # Mensaje mostrado al jugador bloqueado por VPN
+      kick-message: "&cConexiones VPN no están permitidas en este servidor."
+      # APIs externas para detección de VPN (se consultan asíncronamente)
+      apis:
+        # proxycheck.io — Recomendado. Requiere API key para uso intensivo.
+        proxycheck:
+          enabled: true
+          api-key: ""  # Opcional. Dejar vacío para usar el tier gratuito
+        # ip-api.com — Respaldo gratuito
+        ip-api:
+          enabled: true
+
+    # --- Reputación de IPs ---
+    ip-reputation:
+      enabled: true
+      # Puntuación mínima de riesgo (0-100) para bloquear automáticamente
+      # 0 = bloquea todo, 100 = solo bloquea lo más peligroso. Recomendado: 75
+      block-threshold: 75
+      # Fuentes de reputación (AbuseIPDB, etc.)
+      abuseipdb:
+        enabled: false
+        api-key: ""  # Requiere clave de AbuseIPDB
+
+    # --- Bloqueo Geográfico ---
+    geo-blocking:
+      enabled: false
+      # Modo: blacklist (bloquear países listados) o whitelist (permitir solo listados)
+      mode: blacklist
+      # Códigos ISO-3166-1 alpha-2 de países
+      countries: []
+      # Ejemplo de lista negra: - "CN" - "RU" - "KP"
+      # Ejemplo de lista blanca: - "ES" - "US" - "MX"
+
+    # --- Rate Limiting ---
+    rate-limiting:
+      enabled: true
+      # Máximo de intentos de conexión por IP en la ventana de tiempo
+      max-connections-per-window: 5
+      # Ventana de tiempo en segundos
+      window-seconds: 60
+      # Duración del ban temporal en minutos
+      ban-duration-minutes: 30
+
+  # ------------------------------------------------------------------------------
+  # MÓDULO 2: GUARDIAN — Antimalware y Protección de Integridad
+  # ------------------------------------------------------------------------------
+  guardian:
+    enabled: true
+    # Intervalo en minutos para escaneo automático de archivos
+    scan-interval-minutes: 60
+    # Directorios a monitorizar (relativos a la raíz del servidor)
+    monitored-directories:
+      - "plugins"
+      - "."  # Raíz del servidor
+    # Extensiones de archivo a escanear
+    scan-extensions:
+      - ".jar"
+      - ".sh"
+      - ".bat"
+      - ".py"
+      - ".js"
+    # Acción si se detecta archivo sospechoso: alert, quarantine
+    suspicious-action: alert
+    # Directorio de cuarentena para archivos sospechosos
+    quarantine-dir: "nexus-quarantine"
+
+  # ------------------------------------------------------------------------------
+  # MÓDULO 3: SENTINEL — Monitorización Continua 24/7
+  # ------------------------------------------------------------------------------
+  sentinel:
+    enabled: true
+    # Intervalo en segundos para muestreo de métricas del sistema
+    metrics-interval-seconds: 30
+    # Umbrales de alerta (porcentaje)
+    cpu-alert-threshold: 85
+    ram-alert-threshold: 90
+    disk-alert-threshold: 95
+    # Monitorizar puertos abiertos del servidor
+    monitor-ports: true
+    # Monitorizar conexiones de jugadores
+    monitor-connections: true
+
+  # ------------------------------------------------------------------------------
+  # MÓDULO 4: DEFENDER AI — Detección Inteligente de Anomalías
+  # ------------------------------------------------------------------------------
+  defender-ai:
+    enabled: true
+    # Período de aprendizaje inicial en horas (el AI aprende el comportamiento normal)
+    learning-period-hours: 24
+    # Umbral de desviación estándar para considerar anomalía (z-score)
+    # Mayor valor = menos sensible a variaciones. Recomendado: 2.5-3.5
+    anomaly-threshold: 3.0
+    # Umbral de puntuación de riesgo para CRITICAL (0-100)
+    critical-threshold: 85
+    # Umbral de puntuación de riesgo para HIGH
+    high-threshold: 70
+    # Umbral de puntuación de riesgo para MEDIUM
+    medium-threshold: 50
+    # Predicción de ataques: regresión lineal sobre el histórico para anticipar oleadas
+    prediction-enabled: true
+    # Margen de la banda de predicción (múltiplos de la desviación estándar residual)
+    prediction-margin: 1.5
+    # Retención de datos históricos para análisis en días
+    history-days: 30
+
+  # ------------------------------------------------------------------------------
+  # MÓDULO 5: VAULT — Backups y Recuperación
+  # ------------------------------------------------------------------------------
+  vault:
+    enabled: true
+    # Directorio de backups (absoluto o relativo a la raíz del servidor)
+    backup-dir: "nexus-backups"
+    # Programación de backups automáticos (formato cron simplificado)
+    # Opciones: daily, weekly, hourly o expresión cron: "0 2 * * *" (2am cada día)
+    schedule: "daily"
+    # Hora del backup diario (formato 24h)
+    backup-hour: 3  # 3:00 AM
+    # Días de retención de backups
+    retention-days: 30
+    # Cifrar backups con AES-256-GCM
+    encrypt: true
+    # Contraseña de cifrado (CAMBIAR OBLIGATORIAMENTE)
+    encryption-password: "CHANGE_THIS_STRONG_PASSWORD_NOW"
+    # Backups incrementales: solo archivos modificados desde el último backup FULL
+    # (restore: /security vault restore <archivo>)
+    incremental: true
+    # Cada cuántos backups se fuerza un FULL (los incrementales dependen del último FULL)
+    full-backup-every: 7
+    # Directorios a incluir en el backup
+    include-dirs:
+      - "world"
+      - "world_nether"
+      - "world_the_end"
+      - "plugins"
+    # Comprimir backups (ZIP)
+    compress: true
+    # Máximo de backups simultáneos (para no saturar el servidor)
+    max-concurrent: 1
+
+  # ------------------------------------------------------------------------------
+  # MÓDULO 6: INTEGRITY — Control de Integridad del Sistema
+  # ------------------------------------------------------------------------------
+  integrity:
+    enabled: true
+    # Intervalo en minutos para verificar integridad de archivos críticos
+    check-interval-minutes: 15
+    # Archivos críticos a proteger (relativos a la raíz del servidor)
+    critical-files:
+      - "server.properties"
+      - "bukkit.yml"
+      - "spigot.yml"
+      - "paper.yml"
+      - "paper-global.yml"
+    # Acción si se detecta modificación no autorizada: alert, restore
+    modification-action: alert
+
+  # ------------------------------------------------------------------------------
+  # MÓDULO 7: VULNERABILITY CENTER — Gestión de Vulnerabilidades
+  # ------------------------------------------------------------------------------
+  vulnerability-center:
+    enabled: true
+    # Intervalo en horas para escanear vulnerabilidades de plugins
+    scan-interval-hours: 24
+    # Endpoint del feed de CVEs (configurable)
+    cve-feed-url: "https://api.nexussecurity.io/v1/cve-feed"
+    # Nivel mínimo de riesgo para alertar: low, medium, high, critical
+    alert-threshold: medium
+
+  # ------------------------------------------------------------------------------
+  # MÓDULO 8: THREAT INTELLIGENCE — Inteligencia de Amenazas Global
+  # ------------------------------------------------------------------------------
+  threat-intelligence:
+    enabled: true
+    # Intervalo en horas para sincronizar feeds de amenazas
+    sync-interval-hours: 6
+    # Endpoints de feeds de amenazas externas
+    feeds:
+      - "https://api.nexussecurity.io/v1/threat-feed"
+    # Compartir amenazas detectadas de forma anónima (hash de IP, no IP real)
+    share-anonymous: true
+    # Umbral de confianza mínimo (0-100) para actuar sobre inteligencia compartida
+    confidence-threshold: 80
+
+  # ------------------------------------------------------------------------------
+  # MÓDULO 9: COMPLIANCE — Auditoría y Registros
+  # ------------------------------------------------------------------------------
+  compliance:
+    enabled: true
+    # Registrar comandos de administradores
+    log-admin-commands: true
+    # Registrar comandos de jugadores
+    log-player-commands: true
+    # Registrar conexiones y desconexiones
+    log-connections: true
+    # Registrar acciones de inventario (advertencia: alto volumen de datos)
+    log-inventory: false
+    # Exportar logs automáticamente
+    auto-export:
+      enabled: false
+      # Formato: csv, json, txt
+      format: json
+      # Intervalo en días
+      interval-days: 7
+      # Directorio de exportación
+      export-dir: "nexus-exports"
+
+  # ------------------------------------------------------------------------------
+  # MÓDULO 10: AUTOPILOT — Automatización y Remediación
+  # ------------------------------------------------------------------------------
+  autopilot:
+    enabled: true
+    # Activar modo completamente automático (sin confirmación humana)
+    # PRECAUCIÓN: En modo false, las acciones críticas requieren confirmación de admin
+    fully-automatic: true
+    # Modo de emergencia: se activa automáticamente ante amenazas CRITICAL
+    emergency-mode:
+      enabled: true
+      # Acciones automáticas en modo emergencia
+      actions:
+        kick-all-players: false  # Expulsar a todos los jugadores (muy agresivo)
+        block-new-connections: true
+        initiate-backup: true
+        notify-admins: true
+        increase-log-level: true
+
+    # Playbooks de respuesta automática
+    playbooks:
+      # Respuesta a intentos de fuerza bruta
+      brute-force:
+        enabled: true
+        trigger-threshold: 10  # Intentos fallidos
+        action: temp-ban
+        ban-duration-minutes: 60
+      # Respuesta a VPN detectada
+      vpn-detected:
+        enabled: true
+        action: kick
+      # Respuesta a uso de hacks
+      hack-detected:
+        enabled: true
+        trigger-violations: 5  # Número de violaciones antes de actuar
+        action: temp-ban
+        ban-duration-minutes: 1440  # 24 horas
+
+  # ------------------------------------------------------------------------------
+  # MÓDULO 11: HACK DETECTOR — Detección de Hacks y Explotaciones
+  # ------------------------------------------------------------------------------
+  hack-detector:
+    enabled: true
+    # Sensibilidad global: low, medium, high, extreme
+    # low: Muy pocos falsos positivos, puede perder algunos hackers sutiles
+    # medium: Balance entre falsos positivos y detección (RECOMENDADO)
+    # high: Detecta la mayoría de hacks, algunos falsos positivos posibles
+    # extreme: Detección máxima, puede afectar a jugadores con lag
+    sensitivity: medium
+
+    # Acción al confirmar hack: warn, kick, temp-ban, ban
+    default-action: temp-ban
+    ban-duration-minutes: 1440  # 24 horas para temp-ban
+
+    # Número de violaciones antes de actuar (evita falsos positivos)
+    violations-before-action: 5
+
+    # Notificar a administradores cuando se detecte una violación
+    notify-admins: true
+
+    # --- Análisis de Movimiento ---
+    movement:
+      enabled: true
+      # Velocidad máxima permitida (bloques por tick, vanilla ≈ 0.7 sprint)
+      max-speed: 0.75
+      # Tolerancia adicional para lag (multiplicador). 1.5 = 50% de margen
+      lag-tolerance: 1.5
+      # Detectar vuelo ilegal
+      detect-flight: true
+      # Detectar paso por bloques sólidos (NoClip)
+      detect-no-clip: true
+      # Detectar teletransportación instantánea
+      detect-teleport-hack: true
+      # Detectar Step (subir más de 1 bloque por tick)
+      detect-step: true
+      # Detectar Spider (escalar paredes)
+      detect-spider: true
+
+    # --- Análisis de Combate ---
+    combat:
+      enabled: true
+      # Alcance máximo de golpe en bloques (vanilla PvP ≈ 3.0)
+      max-reach: 3.2
+      # Máximo de clicks por segundo (CPS) considerado legítimo
+      max-cps: 20
+      # Detectar Killaura (golpear múltiples entidades en ángulos imposibles)
+      detect-killaura: true
+      # Detectar Aimbot (cambios de ángulo demasiado rápidos)
+      detect-aimbot: true
+      # Detectar Criticals ilegales (críticos sin estar cayendo)
+      detect-illegal-crits: true
+
+    # --- Análisis de Comandos ---
+    commands:
+      enabled: true
+      # Máximo de comandos por segundo por jugador
+      max-commands-per-second: 5
+      # Detectar patrones de macro (comandos ejecutados con intervalos perfectamente regulares)
+      detect-macros: true
+      # Comandos sospechosos a monitorizar
+      suspicious-commands:
+        - "op"
+        - "deop"
+        - "stop"
+        - "reload"
+
+# ------------------------------------------------------------------------------
+# SECCIÓN: PANEL WEB EMPOTRADO
+# ------------------------------------------------------------------------------
+# Panel de administración accesible desde el navegador (sin dependencias externas).
+# La IP se detecta automáticamente: usa server-ip, luego una consulta a public-ip-url,
+# luego la IP LAN. El puerto lo eliges tú (p.ej. 25580) y el panel queda en
+# http://<ip-del-servidor>:<puerto>.
+web-panel:
+  # Activar el panel web
+  enabled: false
+  # Puerto del panel (ejemplo: si el server es 169.58.119.187:25578, pon 25580 → panel en 169.58.119.187:25580)
+  port: 25580
+  # Dirección de enlace (0.0.0.0 = accesible desde fuera; usa 127.0.0.1 para solo local)
+  bind-address: "0.0.0.0"
+  # Host fijo opcional (si se define, se usa en lugar de la detección automática)
+  host: ""
+  # Requerir contraseña para entrar al panel
+  require-password: true
+  # Contraseña de acceso. Por defecto NexusSecurity123.
+  # IMPORTANTE: el panel MUESTRA la contraseña por defecto; al cambiarla deja de mostrarse.
+  password: "NexusSecurity123"
+  # Minutos de validez de la sesión
+  session-timeout-minutes: 60
+  # URL usada para detectar la IP pública (déjala vacía para omitir)
+  public-ip-url: "https://api.ipify.org"
+  # Intentos de login fallidos antes del bloqueo
+  max-failed-logins: 5
+  # Minutos de bloqueo tras superar los intentos fallidos
+  lockout-minutes: 10
+  # Autenticación de dos factores (TOTP). Si true, el login pide un código de Google Authenticator.
+  # El secreto se genera solo y se muestra en Ajustes la primera vez.
+  two-factor: false
+  # Usuarios con roles (admin = acciones; viewer = solo lectura). Si se define, reemplaza password anterior.
+  # users:
+  #   admin:
+  #     password: "NexusSecurity123"
+  #     role: "admin"
+  #   soporte:
+  #     password: "viewerpass"
+  #     role: "viewer"
+
+# ------------------------------------------------------------------------------
+# SECCIÓN: NOTIFICACIONES Y ALERTAS
+# ------------------------------------------------------------------------------
+notifications:
+  # Mostrar alertas en consola del servidor
+  console: true
+  # Nivel mínimo de severidad para mostrar en consola: info, warning, critical
+  console-min-level: info
+  # Mostrar alertas a jugadores con permiso nexussecurity.alerts
+  in-game: true
+  # Nivel mínimo de severidad para alertas in-game: warning, critical
+  in-game-min-level: warning
+  # Prefijo de los mensajes de NexusSecurity
+  prefix: "&8[&bNexusSecurity&8]&r "
+
+  # Notificaciones externas (Discord / Telegram) para alertas críticas
+  external:
+    enabled: false
+    # Nivel mínimo que se reenvía: info, warning, critical
+    min-level: critical
+  discord:
+    # URL del webhook de Discord (dejar vacío para desactivar)
+    webhook-url: ""
+  telegram:
+    # Token del bot de Telegram (dejar vacío para desactivar)
+    token: ""
+    # ID del chat de destino
+    chat-id: ""
+
+# ------------------------------------------------------------------------------
+# SECCIÓN: IDIOMA Y MENSAJES
+# ------------------------------------------------------------------------------
+language:
+  # Idioma del plugin: es (Español), en (English)
+  locale: es
+
+# ------------------------------------------------------------------------------
+# SECCIÓN: MODO DEBUG (Solo para desarrollo/soporte)
+# ------------------------------------------------------------------------------
+debug:
+  enabled: false
+  # Nivel de verbosidad: 1 (mínimo) - 3 (máximo)
+  level: 1

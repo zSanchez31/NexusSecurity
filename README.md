@@ -54,13 +54,11 @@ api:
 ```
 
 - `TU_CLAVE_API_AQUI` (por defecto) → **modo LIMITADO** (módulos premium inactivos).
-- Cualquier clave que empiece por `DEV-` o `TEST-` (p. ej. `DEV-NEXUS-KEY`) → **activa todo sin
-  validación remota** (solo para pruebas en local).
-- Una clave válida real → desbloquea módulos según tu suscripción.
+- Con una clave válida (la que te proporciona el dueño) → desbloquea las funciones del plugin.
+  Cada clave está **vinculada a un único servidor** y no puede usarse en varios a la vez.
 
 El endpoint de validación por defecto es `https://api-keys.nexusnodes.online/v1/validate`
-(configurable con `api.validation-endpoint`). Las claves tienen el formato `sk-` + 24 caracteres
-(`[A-Za-z0-9]`) y se generan desde el **generador web del dueño** (ver abajo).
+(configurable con `api.validation-endpoint`). La clave te la proporciona el dueño/administrador.
 
 ### Panel web (`web-panel`)
 
@@ -254,51 +252,12 @@ descarga `NexusSecurity-1.1.5.jar` y súbelo a `plugins/`.
 
 ---
 
-## Generador de claves API (app web del dueño)
+## Clave de API
 
-En `api-key-generator/` hay una **app web estática** (HTML/CSS/JS) para generar claves de API
-(`sk-` + 24 caracteres) **solo para el dueño**, pensada para desplegarse en Netlify en el dominio
-`api-keys.nexusnodes.online`. El plugin apunta por defecto a
-`https://api-keys.nexusnodes.online/v1/validate`, que es servido por la propia app vía una
-Netlify Function.
-
-### Estructura
-
-```
-api-key-generator/
-├── index.html              # UI con puerta de contraseña de propietario
-├── styles.css
-├── app.js
-├── netlify.toml           # publish + redirects /v1/* → functions
-└── netlify/functions/
-    ├── generate.mjs        # POST /v1/generate (requiere OWNER_PASSWORD) → crea y guarda la clave
-    ├── validate.mjs        # POST /v1/validate (Authorization: Bearer <key>) → respuesta del plugin
-    └── package.json        # @netlify/blobs (almacén de claves)
-```
-
-### Despliegue en Netlify
-
-1. Conecta el repo en Netlify y define el **site directory** `api-key-generator`
-   (o usa `netlify.toml` que ya fija `publish = "."` y `functions`).
-2. La contraseña de propietario se define **dentro del código**, en
-   `netlify/functions/generate.mjs` (constante `OWNER_PASSWORD`). Cámbiala antes de desplegar; ya
-   no hace falta configurar variables de entorno en Netlify.
-3. Asigna el dominio **`api-keys.nexusnodes.online`** en *Domain settings*.
-4. Despliega. El generador quedará en `https://api-keys.nexusnodes.online/` y la validación en
-   `https://api-keys.nexusnodes.online/v1/validate`.
-
-### Cómo funciona
-
-- El dueño abre la web, introduce la contraseña de propietario (la constante `OWNER_PASSWORD` de
-  `generate.mjs`) y pulsa **Generar clave API**.
-- `generate.mjs` crea una clave `sk-xxxxxxxx...` (24 chars) y la guarda en un **Netlify Blob store**
-  (`keys`); la devuelve en pantalla.
-- Al poner esa clave en `api.key` del plugin, `ApiValidator` llama a `/v1/validate` con
-  `Authorization: Bearer <key>`; `validate.mjs` la busca y responde con
-  `{valid:true, plan:"PREMIUM", premiumFeaturesEnabled:true, ...}`, activando el modo completo.
-
-> Las claves generadas localmente con prefijo `DEV-`/`TEST-` siguen activando el modo FULL sin
-> validación remota, útil para pruebas.
+La clave de API (`api.key`) es **proporcionada por el dueño/administrador**; no se genera por tu
+cuenta. Pon la clave que te faciliten en `config.yml` (`api.key`) para activar las funciones del
+plugin. El plugin la valida contra el servidor de licencias por defecto
+(`https://api-keys.nexusnodes.online/v1/validate`).
 
 ---
 

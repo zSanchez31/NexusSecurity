@@ -35,6 +35,13 @@ build/
 ### Mac OS ###
 .DS_Store
 
+### Meta / IA (no va al repositorio) ###
+AGENTS.md
+CLAUDE.md
+.opencode/
+.cursor/
+.github/copilot*
+
 ### NexusSecurity API Server ###
 apiserver/keys.db*
 apiserver/__pycache__/

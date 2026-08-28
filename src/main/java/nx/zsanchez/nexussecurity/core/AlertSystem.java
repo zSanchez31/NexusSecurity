@@ -132,7 +132,7 @@ public class AlertSystem {
             switch (severity) {
                 case INFO     -> logger.info(prefix + description);
                 case WARNING  -> logger.warning(prefix + description);
-                case CRITICAL -> logger.log(Level.SEVERE, prefix + "⚠ CRITICAL ⚠ " + description);
+                case CRITICAL -> logger.log(Level.SEVERE, prefix + "CRITICAL - " + description);
             }
         }
 

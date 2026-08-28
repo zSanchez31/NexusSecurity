@@ -60,6 +60,6 @@ public class Autopilot implements SecurityModule {
 
     @Override
     public String getStatusSummary() {
-        return "&aACTIVO &7| Emergency: " + (emergencyMode != null && emergencyMode.isActive() ? "&c🚨 ON" : "&aOFF");
+        return "&aACTIVO &7| Emergency: " + (emergencyMode != null && emergencyMode.isActive() ? "&cON" : "&aOFF");
     }
 }

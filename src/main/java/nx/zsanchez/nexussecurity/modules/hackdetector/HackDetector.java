@@ -189,7 +189,7 @@ public class HackDetector implements nx.zsanchez.nexussecurity.core.SecurityModu
         if (notifyAdmins) {
             // Already logged by alertSystem; additional notification to staff
             String staffMsg = nx.zsanchez.nexussecurity.util.MessageFormatter.warning(
-                    "⚔ " + player.getName() + " - Violación #" + count + " [" + type + "] " + details);
+                    player.getName() + " - Violación #" + count + " [" + type + "] " + details);
             Bukkit.getOnlinePlayers().stream()
                     .filter(p -> p.hasPermission("nexussecurity.alerts") && !p.equals(player))
                     .forEach(p -> p.sendMessage(staffMsg));

@@ -125,7 +125,7 @@ public class WebPanel {
             return;
         }
         if (requirePassword && DEFAULT_PASSWORD.equals(password)) {
-            plugin.getLogger().warning("[WebPanel] ⚠ Usando la contraseña por defecto ("
+            plugin.getLogger().warning("[WebPanel] Usando la contraseña por defecto ("
                     + DEFAULT_PASSWORD + "). ¡Cámbiala en config.yml!");
         }
         try {
@@ -566,7 +566,7 @@ public class WebPanel {
         return "<!doctype html><html lang='es'><head><meta charset='utf-8'>" +
                 "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
                 "<title>NexusSecurity — Acceso</title>" + style() + "</head><body>" +
-                "<div class='login'><div class='brand'>🛡️ NexusSecurity</div>" +
+                "<div class='login'><div class='brand'>NexusSecurity</div>" +
                 "<h2>Panel de Administración</h2>" +
                 (error != null ? "<div class='msg err'>" + escapeHtml(error) + "</div>" : "") +
                 (isDefaultPassword() ? "<div class='msg warn'>Usando contraseña por defecto: <b>" + DEFAULT_PASSWORD + "</b>. Cámbiala en config.yml.</div>" : "") +
@@ -592,7 +592,7 @@ public class WebPanel {
                 "<a href='/backups'>Backups</a><a href='/audit'>Auditoría</a><a href='/events'>Eventos</a>" +
                 "<a href='/settings'>Ajustes</a><a href='/console'>Consola</a><a href='/config'>Config</a>" +
                 "<span class='right'>" + planBadge + "</span>" +
-                "<a class='right' href='javascript:toggleTheme()' title='Cambiar tema'>🌓</a>" +
+                "<a class='right' href='javascript:toggleTheme()' title='Cambiar tema'>Tema</a>" +
                 "<a class='right' href='/logout'>Salir</a></nav>";
     }
 
@@ -621,12 +621,12 @@ public class WebPanel {
         var sub = plugin.getSubscriptionManager();
 
         StringBuilder b = new StringBuilder();
-        b.append("<header class='page'><h1>🛡️ Dashboard</h1>");
+        b.append("<header class='page'><h1>Dashboard</h1>");
         b.append("<span class='ts' id='ts'>").append(Instant.now().atZone(ZoneId.systemDefault())
                 .format(DateTimeFormatter.ofPattern("HH:mm:ss"))).append("</span></header>");
 
         if (!sub.isSubscriptionActive()) {
-            b.append("<div class='upsell'>🚀 Estás en la <b>Versión Gratuita</b>. Las acciones (módulos, escaneos, jugadores, blacklist) requieren suscripción.<br>" +
+            b.append("<div class='upsell'>Estás en la <b>Versión Gratuita</b>. Las acciones (módulos, escaneos, jugadores, blacklist) requieren suscripción.<br>" +
                     "Activa <b>PREMIUM</b> con tu API key para desbloquear el panel de control completo, gestión de jugadores y auditoría en vivo.</div>");
         } else {
             String plan = "PREMIUM";
@@ -679,7 +679,7 @@ public class WebPanel {
         boolean emerg = autopilot != null && autopilot.getEmergencyMode() != null && autopilot.getEmergencyMode().isActive();
         b.append("<div class='card'><h3>Modo de Emergencia</h3>");
         if (emerg) {
-            b.append("<div class='banner'>🚨 EMERGENCIA ACTIVA</div>");
+            b.append("<div class='banner'>EMERGENCIA ACTIVA</div>");
             b.append(actionForm("emergency", "Desactivar emergencia", "btn warn", Map.of("state", "off")));
         } else {
             if (sub.isSubscriptionActive()) {
@@ -704,7 +704,7 @@ public class WebPanel {
                         : actionForm("enable", "Activar", "btn small ok", Map.of("module", m.getName()));
                 b.append("<td>").append(cell).append("</td>");
             } else {
-                b.append("<td class='muted'>🔒</td>");
+                b.append("<td class='muted'>-</td>");
             }
             b.append("</tr>");
         }
@@ -735,7 +735,7 @@ public class WebPanel {
 
     private String renderPlayers(HttpExchange ex) {
         String token = getSessionToken(ex);
-        String body = "<header class='page'><h1>👥 Jugadores</h1>" +
+        String body = "<header class='page'><h1>Jugadores</h1>" +
                 "<span class='ts' id='ts'></span></header>" +
                 "<div class='live' id='live'>" + playersTable() + "</div>" + liveScript("players");
         return page("Jugadores", body, token);
@@ -778,8 +778,8 @@ public class WebPanel {
         b.append(statCard("Ping", d.ping() + "ms", "ok", ""));
         b.append(statCard("Modo", d.gamemode(), "ok", ""));
         b.append(statCard("Mundo", escapeHtml(d.world()), "ok", ""));
-        b.append(statCard("Vida", String.format("%.0f", d.health()) + " ❤", d.health() < 6 ? "bad" : "ok", ""));
-        b.append(statCard("Comida", d.food() + " 🍗", d.food() < 6 ? "bad" : "ok", ""));
+        b.append(statCard("Vida", String.format("%.0f", d.health()), d.health() < 6 ? "bad" : "ok", ""));
+        b.append(statCard("Comida", String.valueOf(d.food()), d.food() < 6 ? "bad" : "ok", ""));
         b.append(statCard("Nivel", String.valueOf(d.level()), "ok", ""));
         b.append("</div>");
 
@@ -833,7 +833,7 @@ public class WebPanel {
         String token = getSessionToken(ex);
         Map<String, String> q = parseParams(ex.getRequestURI().getQuery());
         StringBuilder b = new StringBuilder();
-        b.append("<header class='page'><h1>📡 Eventos de Seguridad</h1>");
+        b.append("<header class='page'><h1>Eventos de Seguridad</h1>");
         b.append("<a class='btn small' href='/api/events.csv'>Exportar CSV</a></header>");
         b.append("<form method='get' action='/events' class='row'><select name='module'>");
         String sel = q.getOrDefault("module", "");
@@ -855,7 +855,7 @@ public class WebPanel {
                 "t.insertBefore(tr, t.firstChild);" +
                 "while(t.children.length>200) t.removeChild(t.lastChild);}" +
                 "if(nx_es){nx_es.onmessage=function(e){try{var d=JSON.parse(e.data); nx_addRow(d);" +
-                "if((d.severity||'').toLowerCase()==='critical'){nx_toast('🚨 '+ (d.module||'')+': '+(d.message||''));}}catch(_){}};" +
+                "if((d.severity||'').toLowerCase()==='critical'){nx_toast('ALERTA: '+ (d.module||'')+': '+(d.message||''));}}catch(_){}};" +
                 "nx_es.onerror=function(){nx_es.close(); nx_es=null;};}" +
                 "if(!nx_es){setInterval(function(){fetch('/frag/events').then(r=>r.text()).then(h=>{var el=document.getElementById('live'); if(el) el.innerHTML=h;}).catch(function(){});},10000);}" +
                 "function nx_toast(msg){try{var t=document.createElement('div'); t.className='toast'; t.textContent=msg;" +
@@ -889,7 +889,7 @@ public class WebPanel {
         String token = getSessionToken(ex);
         var sub = plugin.getSubscriptionManager();
         StringBuilder b = new StringBuilder();
-        b.append("<header class='page'><h1>🚫 Blacklist de IP</h1></header>");
+        b.append("<header class='page'><h1>Blacklist de IP</h1></header>");
         b.append("<div class='card'><h3>Añadir IP</h3>");
         if (sub.isSubscriptionActive()) {
             b.append("<form method='post' action='/action' class='row'>");
@@ -914,7 +914,7 @@ public class WebPanel {
             if (sub.isSubscriptionActive()) {
                 b.append("<td>").append(actionForm("unban-ip", "Quitar", "btn small", Map.of("ip", ip))).append("</td>");
             } else {
-                b.append("<td class='muted'>🔒</td>");
+                b.append("<td class='muted'>-</td>");
             }
             b.append("</tr>");
         }
@@ -933,7 +933,7 @@ public class WebPanel {
         int offset = page * size;
 
         StringBuilder b = new StringBuilder();
-        b.append("<header class='page'><h1>📜 Auditoría</h1>");
+        b.append("<header class='page'><h1>Auditoría</h1>");
         b.append("<a class='btn small' href='/api/audit.csv?actor=").append(escapeHtml(actor))
                 .append("&action=").append(escapeHtml(action)).append("&q=").append(escapeHtml(search)).append("'>Exportar CSV</a></header>");
         b.append("<form method='get' action='/audit' class='row'>");
@@ -974,7 +974,7 @@ public class WebPanel {
         String token = getSessionToken(ex);
         HackDetector hd = plugin.getModuleManager().getModule("hackdetector", HackDetector.class);
         StringBuilder b = new StringBuilder();
-        b.append("<header class='page'><h1>🕵️ Sospechosos (HackDetector)</h1></header>");
+        b.append("<header class='page'><h1>Sospechosos (HackDetector)</h1></header>");
         if (hd == null || !hd.isEnabled()) {
             b.append("<div class='card'><p class='muted'>HackDetector no está activo.</p></div>");
             return page("Sospechosos", b.toString(), token);
@@ -998,7 +998,7 @@ public class WebPanel {
         String token = getSessionToken(ex);
         String user = sessions.get(token);
         StringBuilder b = new StringBuilder();
-        b.append("<header class='page'><h1>⚙️ Ajustes del panel</h1></header>");
+        b.append("<header class='page'><h1>Ajustes del panel</h1></header>");
         Map<String, String> q = parseParams(ex.getRequestURI().getQuery());
         if ("1".equals(q.get("ok"))) b.append("<div class='premiumok'>Contraseña actualizada correctamente.</div>");
         if ("1".equals(q.get("e"))) b.append("<div class='banner'>Contraseña actual incorrecta.</div>");
@@ -1027,7 +1027,7 @@ public class WebPanel {
         String token = getSessionToken(ex);
         Map<String, String> q = parseParams(ex.getRequestURI().getQuery());
         StringBuilder b = new StringBuilder();
-        b.append("<header class='page'><h1>🖥️ Consola del servidor</h1>");
+        b.append("<header class='page'><h1>Consola del servidor</h1>");
         if ("1".equals(q.get("ok"))) b.append("<div class='premiumok'>Comando enviado.</div>");
         b.append("</header>");
         b.append("<div class='card'><form method='post' action='/action' class='col'>");
@@ -1052,7 +1052,7 @@ public class WebPanel {
         String token = getSessionToken(ex);
         Map<String, String> q = parseParams(ex.getRequestURI().getQuery());
         StringBuilder b = new StringBuilder();
-        b.append("<header class='page'><h1>⚙️ Configuración (config.yml)</h1>");
+        b.append("<header class='page'><h1>Configuración (config.yml)</h1>");
         if ("1".equals(q.get("ok"))) b.append("<div class='premiumok'>Guardado. Algunos módulos pueden requerir /security reload.</div>");
         b.append("</header>");
         b.append("<div class='card'><form method='post' action='/action' class='col'>");
@@ -1073,7 +1073,7 @@ public class WebPanel {
     private String renderBackups(HttpExchange ex) {
         String token = getSessionToken(ex);
         StringBuilder b = new StringBuilder();
-        b.append("<header class='page'><h1>💾 Backups (Vault)</h1>");
+        b.append("<header class='page'><h1>Backups (Vault)</h1>");
         b.append(actionForm("backup", "Nuevo backup", "btn small", Map.of())).append("</header>");
         if (!plugin.getSubscriptionManager().isSubscriptionActive()) {
             b.append("<div class='upsell'>La gestión de backups requiere suscripción activa.</div>");

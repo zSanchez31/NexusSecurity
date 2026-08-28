@@ -134,7 +134,7 @@ public class SubscriptionManager {
             scheduleRevalidation();
             scheduleExpiryWarning(response);
 
-            logger.info("[Subscription] ✅ ACTIVE — Plan: " + response.getPlan() +
+            logger.info("[Subscription] ACTIVE — Plan: " + response.getPlan() +
                     " | Expires: " + TimeUtil.format(response.getExpiresAt()) +
                     " | Expires in: " + TimeUtil.timeUntil(response.getExpiresAt()));
 
@@ -159,7 +159,7 @@ public class SubscriptionManager {
                 } else {
                     // Invalid key or subscription truly expired
                     deactivateModules();
-                    logger.severe("[Subscription] ❌ INVALID — " + response.getMessage() +
+                    logger.severe("[Subscription] INVALID — " + response.getMessage() +
                             ". Plugin running in LIMITED mode (logs only).");
                     eventBus.publish(EventBus.EVENT_SUBSCRIPTION_FAIL);
                 }
@@ -234,7 +234,7 @@ public class SubscriptionManager {
      * Sends expiry warning to console and admins.
      */
     private void sendExpiryWarning() {
-        String msg = MessageFormatter.warning("⚠ La suscripción de NexusSecurity expira en 7 días. " +
+        String msg = MessageFormatter.warning("La suscripción de NexusSecurity expira en 7 días. " +
                 "Renueva en https://nexussecurity.io/dashboard para evitar pérdida de protección.");
         logger.warning(msg);
         Bukkit.getOnlinePlayers().stream()

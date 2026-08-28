@@ -40,7 +40,7 @@ public class EmergencyMode {
         if (active) return;
         this.active = true;
 
-        alertSystem.critical("Autopilot", "EmergencyMode", "🚨 EMERGENCY MODE ACTIVATED! Applying lockdown policies.");
+        alertSystem.critical("Autopilot", "EmergencyMode", "EMERGENCY MODE ACTIVATED! Applying lockdown policies.");
 
         if (initiateBackup) {
             Vault vault = plugin.getModuleManager().getModule("vault", Vault.class);

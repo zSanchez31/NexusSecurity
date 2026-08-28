@@ -39,7 +39,7 @@ public class PanelCommand {
         if (panel.isDefaultPassword() && plugin.getConfig().getBoolean("web-panel.require-password", true)) {
             sender.sendMessage(MessageFormatter.keyValue("Contraseña",
                     ChatColor.RED + WebPanel.DEFAULT_PASSWORD + " (por defecto — cámbiala en config.yml)"));
-            sender.sendMessage(ChatColor.RED + "⚠ Por seguridad, cambia web-panel.password en config.yml. "
+            sender.sendMessage(ChatColor.RED + "Por seguridad, cambia web-panel.password en config.yml. "
                     + "Dejarla por defecto expone el panel.");
         }
     }

@@ -7,7 +7,7 @@
 
     <groupId>nx.zsanchez</groupId>
     <artifactId>NexusSecurity</artifactId>
-    <version>1.1.5</version>
+    <version>1.1.6</version>
     <packaging>jar</packaging>
 
     <name>NexusSecurity</name>
@@ -164,6 +164,9 @@
                                     </excludes>
                                 </filter>
                             </filters>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
+                            </transformers>
                             <relocations>
                                 <!-- Relocate all shaded deps to avoid conflicts -->
                                 <relocation>
@@ -182,10 +185,8 @@
                                     <pattern>com.github.benmanes.caffeine</pattern>
                                     <shadedPattern>nx.zsanchez.nexussecurity.libs.caffeine</shadedPattern>
                                 </relocation>
-                                <relocation>
-                                    <pattern>org.slf4j</pattern>
-                                    <shadedPattern>nx.zsanchez.nexussecurity.libs.slf4j</shadedPattern>
-                                </relocation>
+                                <!-- NOTA: org.slf4j NO se relocaliza. Relocalizarlo rompe el
+                                     ServiceLoader de SLF4J y provoca el warning "No SLF4J providers". -->
                             </relocations>
                         </configuration>
                     </execution>

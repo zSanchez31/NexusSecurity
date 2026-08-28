@@ -56,8 +56,14 @@ public class NexusSecurity extends JavaPlugin {
         instance = this;
         saveDefaultConfig();
 
-        // 1. Initialize server ID
-        this.serverId = getConfig().getString("server-id", UUID.randomUUID().toString());
+        // 1. Initialize server ID (persist a stable id so API keys bind to this server)
+        if (!getConfig().contains("server-id")) {
+            this.serverId = UUID.randomUUID().toString();
+            getConfig().set("server-id", this.serverId);
+            saveConfig();
+        } else {
+            this.serverId = getConfig().getString("server-id");
+        }
 
         // 2. Initialize Core Infrastructure
         this.threadPoolManager = new ThreadPoolManager(this);

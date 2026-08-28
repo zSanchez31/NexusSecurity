@@ -23,6 +23,15 @@ function json(status, body) {
   };
 }
 
+// Netlify inyecta SITE_ID y NETLIFY_BLOBS_TOKEN automáticamente en los deploys
+// enlazados; si no, se leen de las variables de entorno que configures tú.
+function blobOptions() {
+  const opts = { name: "keys" };
+  if (process.env.SITE_ID) opts.siteID = process.env.SITE_ID;
+  if (process.env.NETLIFY_BLOBS_TOKEN) opts.token = process.env.NETLIFY_BLOBS_TOKEN;
+  return opts;
+}
+
 export const handler = async (event) => {
   if (event.httpMethod !== "POST") return json(405, { error: "Método no permitido" });
 
@@ -44,10 +53,11 @@ export const handler = async (event) => {
     active: true,
     plan: "PREMIUM",
     expiresAt: Date.now() + ONE_YEAR_MS,
+    boundServerId: "",
   };
 
   try {
-    const store = getStore({ name: "keys" });
+    const store = getStore(blobOptions());
     await store.set(key, JSON.stringify(record), { metadata: { active: "true" } });
   } catch (e) {
     return json(500, { error: "No se pudo guardar la clave: " + e.message });

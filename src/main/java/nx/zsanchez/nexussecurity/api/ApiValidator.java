@@ -65,7 +65,7 @@ public class ApiValidator {
         String upperKey = apiKey.toUpperCase().trim();
         boolean isDevMode = plugin.getConfig().getBoolean("api.dev-mode", false);
         if (isDevMode || upperKey.startsWith("DEV-") || upperKey.startsWith("TEST-") || upperKey.equals("DEV-NEXUS-KEY")) {
-            logger.info("[ApiValidator] 🧪 Development / Test API Key detected ('" + apiKey + "'). Bypassing remote validation; FULL mode activated.");
+            logger.info("[ApiValidator] Development / Test API Key detected ('" + apiKey + "'). Bypassing remote validation; FULL mode activated.");
             long oneYearFromNow = System.currentTimeMillis() + (365L * 24 * 60 * 60 * 1000);
             return SubscriptionResponse.valid("DEVELOPMENT", oneYearFromNow, "Dev/Test API Key active");
         }

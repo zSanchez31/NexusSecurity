@@ -101,8 +101,8 @@ public class ExternalNotifier {
         }
         if (!sev.isAtLeast(minSeverity)) return;
 
-        String text = "🛡 **NexusSecurity** [" + entry.severity() + "] " + entry.module() +
-                "\n📍 " + entry.source() + "\n📝 " + entry.description();
+        String text = "NexusSecurity [" + entry.severity() + "] " + entry.module() +
+                "\nOrigen: " + entry.source() + "\nDetalle: " + entry.description();
 
         if (!discordWebhook.isEmpty()) {
             final String discordPayload = jsonEscape(text);

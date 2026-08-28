@@ -41,7 +41,7 @@ public class ApiValidator {
         this.logger = plugin.getLogger();
         this.gson = new Gson();
         this.validationEndpoint = plugin.getConfig().getString(
-                "api.validation-endpoint", "https://api-keys.nexusnodes.online/v1/validate");
+                "api.validation-endpoint", "https://api-keys.nexusnodes.online/api/v1/validate");
         this.timeoutSeconds = plugin.getConfig().getInt("api.timeout-seconds", 10);
         this.maxRetries = plugin.getConfig().getInt("api.max-retries", 3);
         this.userAgent = "NexusSecurity/" + plugin.getDescription().getVersion() +

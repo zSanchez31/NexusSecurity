@@ -1,7 +1,7 @@
 const $ = (id) => document.getElementById(id);
 
 async function apiGenerate(owner, label, verify = false) {
-  const res = await fetch("/.netlify/functions/generate", {
+  const res = await fetch("/api/v1/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ password: owner, label: label || "", verify }),

@@ -1,7 +1,7 @@
 # ==============================================================================
 #                     NexusSecurity — Configuración Principal
 #              Plugin Profesional de Seguridad Multicapa para Minecraft
-#                            Versión: 1.1.6
+#                            Versión: 1.1.7
 # ==============================================================================
 # INSTRUCCIONES:
 #   1. Introduce tu clave API en el campo 'api-key' para activar todas las funciones.
@@ -19,7 +19,7 @@ api:
   key: "TU_CLAVE_API_AQUI"
 
   # Endpoint del servidor de validación. No modificar salvo indicación de soporte.
-  validation-endpoint: "https://api.nexussecurity.io/v1/validate"
+  validation-endpoint: "https://api-keys.nexusnodes.online/api/v1/validate"
 
   # Segundos de espera para solicitudes al servidor de API (timeout)
   timeout-seconds: 10

@@ -4,7 +4,7 @@ Plugin de seguridad todo‑en‑uno para servidores **Minecraft Paper** (1.21+),
 Protege tu servidor con 11 módulos, un **panel web embebido**, auditoría, copias de seguridad y
 notificaciones externas (Discord / Telegram).
 
-> Versión: **1.1.4**
+> Versión: **1.1.5**
 
 ---
 
@@ -58,6 +58,10 @@ api:
   validación remota** (solo para pruebas en local).
 - Una clave válida real → desbloquea módulos según tu suscripción.
 
+El endpoint de validación por defecto es `https://api-keys.nexusnodes.online/v1/validate`
+(configurable con `api.validation-endpoint`). Las claves tienen el formato `sk-` + 24 caracteres
+(`[A-Za-z0-9]`) y se generan desde el **generador web del dueño** (ver abajo).
+
 ### Panel web (`web-panel`)
 
 ```yaml
@@ -101,6 +105,20 @@ notifications:
   telegram:
     token: ""                     # token del bot de Telegram
     chat-id: ""                   # ID del chat de destino
+  slack:
+    webhook-url: ""               # webhook de Slack (incoming)
+  webhook:
+    url: ""                       # webhook genérico (POST JSON: module/severity/source/message)
+  pushover:
+    token: ""                     # token de aplicación Pushover
+    user: ""                      # usuario Pushover
+  smtp:
+    host: ""                      # servidor SMTP (STARTTLS + AUTH LOGIN)
+    port: 587
+    user: ""
+    password: ""
+    from: "nexussecurity@localhost"
+    to: ""
 ```
 
 ### Módulos
@@ -140,8 +158,13 @@ Nombres válidos (en `kebab-case`): `shield`, `guardian`, `sentinel`, `defender-
 - **Sospechosos** (HackDetector): jugadores con violaciones activas.
 - **Backups** (Vault): lista de copias con tamaño/fecha y botón de **restaurar**; acciones de jugador.
 - **Auditoría**: registro de acciones con filtros (actor / acción / búsqueda) y exportación CSV.
-- **Eventos**: feed en vivo (SSE) de alertas del sistema.
+- **Eventos**: feed en vivo (SSE) de alertas del sistema; las alertas **críticas** muestran un
+  *toast* emergente en el navegador.
+- **Consola**: consola del servidor en vivo (SSE) + caja para **ejecutar comandos** como consola
+  (rol `admin`). Logs del servidor en tiempo real.
+- **Config**: editor del `config.yml` desde el navegador (guarda y recarga la config del plugin).
 - **Ajustes**: usuario/rol, cambio de contraseña y (si 2FA está activo) el secreto TOTP.
+- **Tema**: botón 🌓 en la barra para alternar modo claro/oscuro (se recuerda en una cookie).
 
 ---
 
@@ -163,6 +186,10 @@ Cuando una alerta alcanza el nivel configurado (`external.min-level`, por defect
 
 - **Discord**: vía *webhook* (`notifications.discord.webhook-url`).
 - **Telegram**: vía bot (`notifications.telegram.token` + `chat-id`).
+- **Slack**: vía *webhook* de entrada (`notifications.slack.webhook-url`).
+- **Webhook genérico**: POST JSON con `module`/`severity`/`source`/`message` (`notifications.webhook.url`).
+- **Pushover**: notificación push móvil (`notifications.pushover.token` + `user`).
+- **SMTP**: correo vía STARTTLS + AUTH LOGIN (`notifications.smtp.*`).
 
 Los envíos se hacen fuera del hilo principal (thread pool) para no bloquear el servidor.
 
@@ -184,6 +211,19 @@ Los envíos se hacen fuera del hilo principal (thread pool) para no bloquear el 
 | Autopilot | Respuesta automática / modo de emergencia |
 | HackDetector | Detección de clientes ilegales (hacks) |
 
+**Novedades por módulo (v1.1.5):**
+
+- **Guardian** incluye ahora **anti-bot / detección de join-flood** por IP
+  (`modules.guardian.anti-bot.*`): si una misma IP supera `max-joins-per-ip` en `window-seconds`,
+  se marca como bot y se expulsa (si `kick: true`).
+- **Vault** calcula y guarda el **SHA‑256** de cada backup (`.sha256` junto al archivo) y permite
+  subirlo a un destino **offsite** tras cada copia mediante un comando externo
+  (`modules.vault.offsite.command`, p. ej. `rclone copy %FILE% remote:backups/` o
+  `aws s3 cp %FILE% s3://bucket/`).
+- El panel expone métricas en formato **Prometheus** en `GET /api/metrics`
+  (TPS, CPU, RAM, jugadores, módulos, disco, entidades, chunks, mundos, salud, GC, hilos, uptime),
+  útiles para Grafana.
+
 ---
 
 ## Comandos
@@ -198,7 +238,7 @@ Los envíos se hacen fuera del hilo principal (thread pool) para no bloquear el 
 ## Descarga (Release / JAR)
 
 La última versión compilada está en **[Releases](https://github.com/zSanchez31/NexusSecurity/releases)**:
-descarga `NexusSecurity-1.1.4.jar` y súbelo a `plugins/`.
+descarga `NexusSecurity-1.1.5.jar` y súbelo a `plugins/`.
 
 > El JAR de la release es *shaded*: incluye todas las dependencias (Gson, etc.) y está
 > relocalizado a `nx.zsanchez.nexussecurity.libs.*` para evitar conflictos.
@@ -211,6 +251,54 @@ descarga `NexusSecurity-1.1.4.jar` y súbelo a `plugins/`.
 - Si lo expones (`0.0.0.0`), ponlo detrás de un proxy/nginx con HTTPS y firewall, y cambia la
   contraseña por defecto inmediatamente.
 - Activa **2FA** y considera usuarios `viewer` para personal de soporte.
+
+---
+
+## Generador de claves API (app web del dueño)
+
+En `api-key-generator/` hay una **app web estática** (HTML/CSS/JS) para generar claves de API
+(`sk-` + 24 caracteres) **solo para el dueño**, pensada para desplegarse en Netlify en el dominio
+`api-keys.nexusnodes.online`. El plugin apunta por defecto a
+`https://api-keys.nexusnodes.online/v1/validate`, que es servido por la propia app vía una
+Netlify Function.
+
+### Estructura
+
+```
+api-key-generator/
+├── index.html              # UI con puerta de contraseña de propietario
+├── styles.css
+├── app.js
+├── netlify.toml           # publish + redirects /v1/* → functions
+└── netlify/functions/
+    ├── generate.mjs        # POST /v1/generate (requiere OWNER_PASSWORD) → crea y guarda la clave
+    ├── validate.mjs        # POST /v1/validate (Authorization: Bearer <key>) → respuesta del plugin
+    └── package.json        # @netlify/blobs (almacén de claves)
+```
+
+### Despliegue en Netlify
+
+1. Conecta el repo en Netlify y define el **site directory** `api-key-generator`
+   (o usa `netlify.toml` que ya fija `publish = "."` y `functions`).
+2. La contraseña de propietario se define **dentro del código**, en
+   `netlify/functions/generate.mjs` (constante `OWNER_PASSWORD`). Cámbiala antes de desplegar; ya
+   no hace falta configurar variables de entorno en Netlify.
+3. Asigna el dominio **`api-keys.nexusnodes.online`** en *Domain settings*.
+4. Despliega. El generador quedará en `https://api-keys.nexusnodes.online/` y la validación en
+   `https://api-keys.nexusnodes.online/v1/validate`.
+
+### Cómo funciona
+
+- El dueño abre la web, introduce la contraseña de propietario (la constante `OWNER_PASSWORD` de
+  `generate.mjs`) y pulsa **Generar clave API**.
+- `generate.mjs` crea una clave `sk-xxxxxxxx...` (24 chars) y la guarda en un **Netlify Blob store**
+  (`keys`); la devuelve en pantalla.
+- Al poner esa clave en `api.key` del plugin, `ApiValidator` llama a `/v1/validate` con
+  `Authorization: Bearer <key>`; `validate.mjs` la busca y responde con
+  `{valid:true, plan:"PREMIUM", premiumFeaturesEnabled:true, ...}`, activando el modo completo.
+
+> Las claves generadas localmente con prefijo `DEV-`/`TEST-` siguen activando el modo FULL sin
+> validación remota, útil para pruebas.
 
 ---
 

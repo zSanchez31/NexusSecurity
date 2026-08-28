@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NexusSecurity · Generador de API Keys</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg"></div>
+
+  <!-- Pantalla de bloqueo -->
+  <section id="gate" class="screen">
+    <div class="card lock">
+      <div class="shield">🔐</div>
+      <h1>NexusSecurity</h1>
+      <p class="sub">Generador de claves de API &middot; <b>solo para el dueño</b></p>
+      <label for="owner">Contraseña de propietario</label>
+      <div class="inputrow">
+        <input type="password" id="owner" placeholder="••••••••" autocomplete="off" />
+        <button id="unlock" class="btn">Entrar</button>
+      </div>
+      <p id="gateErr" class="err"></p>
+    </div>
+  </section>
+
+  <!-- Panel del generador -->
+  <section id="panel" class="screen hidden">
+    <div class="card">
+      <header class="head">
+        <div class="shield small">🔐</div>
+        <div>
+          <h1>Generador de API Keys</h1>
+          <p class="sub">Crea claves <code>sk-…</code> para activar el modo PREMIUM del plugin</p>
+        </div>
+        <button id="lock" class="btn ghost" title="Cerrar">↩</button>
+      </header>
+
+      <div class="form">
+        <label for="label">Etiqueta (opcional)</label>
+        <input type="text" id="label" placeholder="Ej: Servidor Principal" />
+        <button id="gen" class="btn primary">
+          <span class="txt">Generar clave API</span>
+          <span class="spin" hidden></span>
+        </button>
+        <p id="genErr" class="err"></p>
+      </div>
+
+      <div id="result" class="result hidden">
+        <div class="okmsg">✓ Clave generada</div>
+        <label>Clave de API</label>
+        <div class="keyrow">
+          <code id="keyOut"></code>
+          <button id="copy" class="btn ghost small">Copiar</button>
+        </div>
+        <p class="muted small">Guárdala ahora. Al ponerla en <code>api.key</code> del plugin se activa el modo completo.</p>
+      </div>
+
+      <div class="history" id="historyWrap">
+        <div class="divider"><span>Claves de esta sesión</span></div>
+        <ul id="history"></ul>
+      </div>
+
+      <footer class="foot">
+        Validación del plugin: <code>https://api-keys.nexusnodes.online/v1/validate</code>
+      </footer>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

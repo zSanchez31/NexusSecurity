@@ -8,6 +8,7 @@ import nx.zsanchez.nexussecurity.core.AlertSystem;
 import nx.zsanchez.nexussecurity.core.ThreadPoolManager;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -40,6 +41,7 @@ public class BackupScheduler {
     private List<String> includeDirs;
     private boolean incremental;
     private int fullBackupEvery;
+    private String offsiteCommand;
     private volatile boolean backupInProgress;
 
     public BackupScheduler(NexusSecurity plugin, AlertSystem alertSystem, ThreadPoolManager threadPoolManager) {
@@ -57,6 +59,7 @@ public class BackupScheduler {
         this.includeDirs = plugin.getConfig().getStringList("modules.vault.include-dirs");
         this.incremental = plugin.getConfig().getBoolean("modules.vault.incremental", true);
         this.fullBackupEvery = Math.max(1, plugin.getConfig().getInt("modules.vault.full-backup-every", 7));
+        this.offsiteCommand = plugin.getConfig().getString("modules.vault.offsite.command", "");
     }
 
     /**
@@ -136,9 +139,15 @@ public class BackupScheduler {
             entry.createdAt = System.currentTimeMillis();
             entry.size = backupFile.length();
             entry.baseFile = doFull ? null : state.lastFullBackupFile;
+            entry.sha256 = computeSha256(backupFile);
+            try {
+                Files.writeString(new File(targetFolder, fileName + ".sha256").toPath(), entry.sha256, StandardCharsets.UTF_8);
+            } catch (Exception ignored) {}
             state.backups.removeIf(e -> e.file.equals(fileName));
             state.backups.add(entry);
             writeState(targetFolder, state);
+
+            uploadOffsite(backupFile);
 
             alertSystem.info("Vault", "Backup",
                     "Backup completed: " + fileName + " (" + (backupFile.length() / (1024 * 1024)) + "MB, "
@@ -429,6 +438,51 @@ public class BackupScheduler {
         zos.closeEntry();
     }
 
+    private String computeSha256(File file) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            try (InputStream in = new FileInputStream(file)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) md.update(buf, 0, n);
+            }
+            StringBuilder sb = new StringBuilder();
+            for (byte b : md.digest()) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
+     * Uploads a finished backup to an offsite location using an external command.
+     * The template may contain {@code %FILE%} which is replaced by the absolute path.
+     * Examples: {@code rclone copy %FILE% remote:nexus-backups/} or
+     * {@code aws s3 cp %FILE% s3://my-bucket/backups/}.
+     */
+    private void uploadOffsite(File backupFile) {
+        if (offsiteCommand == null || offsiteCommand.isBlank()) return;
+        try {
+            String cmd = offsiteCommand.replace("%FILE%", backupFile.getAbsolutePath());
+            List<String> args;
+            if (System.getProperty("os.name").toLowerCase().contains("win")) {
+                args = List.of("cmd", "/c", cmd);
+            } else {
+                args = List.of("sh", "-c", cmd);
+            }
+            Process p = new ProcessBuilder(args).redirectErrorStream(true).start();
+            boolean done = p.waitFor(5, java.util.concurrent.TimeUnit.MINUTES);
+            if (done && p.exitValue() == 0) {
+                alertSystem.info("Vault", "Backup", "Offsite upload completado: " + backupFile.getName());
+            } else {
+                alertSystem.warning("Vault", "Backup", "Offsite upload falló (código "
+                        + (done ? p.exitValue() : "timeout") + "): " + backupFile.getName());
+            }
+        } catch (Exception e) {
+            alertSystem.warning("Vault", "Backup", "Offsite upload error: " + e.getMessage());
+        }
+    }
+
     private void rotateOldBackups(File folder) {
         File[] files = folder.listFiles();
         if (files == null) return;
@@ -454,6 +508,7 @@ public class BackupScheduler {
         long createdAt;
         long size;
         String baseFile;
+        String sha256;
     }
 
     private static class VaultState {

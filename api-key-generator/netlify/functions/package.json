@@ -1,0 +1,8 @@
+{
+  "name": "nexussecurity-api-key-generator",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@netlify/blobs": "^8.0.0"
+  }
+}

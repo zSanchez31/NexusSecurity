@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import nx.zsanchez.nexussecurity.NexusSecurity;
 import nx.zsanchez.nexussecurity.api.model.SubscriptionResponse;
+import nx.zsanchez.nexussecurity.util.ApiKeyUtil;
 
 import java.io.*;
 import java.net.*;
@@ -40,7 +41,7 @@ public class ApiValidator {
         this.logger = plugin.getLogger();
         this.gson = new Gson();
         this.validationEndpoint = plugin.getConfig().getString(
-                "api.validation-endpoint", "https://api.nexussecurity.io/v1/validate");
+                "api.validation-endpoint", "https://api-keys.nexusnodes.online/v1/validate");
         this.timeoutSeconds = plugin.getConfig().getInt("api.timeout-seconds", 10);
         this.maxRetries = plugin.getConfig().getInt("api.max-retries", 3);
         this.userAgent = "NexusSecurity/" + plugin.getDescription().getVersion() +
@@ -67,6 +68,12 @@ public class ApiValidator {
             logger.info("[ApiValidator] 🧪 Development / Test API Key detected ('" + apiKey + "'). Bypassing remote validation; FULL mode activated.");
             long oneYearFromNow = System.currentTimeMillis() + (365L * 24 * 60 * 60 * 1000);
             return SubscriptionResponse.valid("DEVELOPMENT", oneYearFromNow, "Dev/Test API Key active");
+        }
+
+        if (!ApiKeyUtil.isValidFormat(apiKey) && !apiKey.toUpperCase().trim().startsWith("DEV-")
+                && !apiKey.toUpperCase().trim().startsWith("TEST-")) {
+            logger.info("[ApiValidator] La API key no coincide con el formato esperado (sk-XXXX...). " +
+                    "Se intentará validar contra el servidor de todos modos.");
         }
 
         SubscriptionResponse lastError = null;

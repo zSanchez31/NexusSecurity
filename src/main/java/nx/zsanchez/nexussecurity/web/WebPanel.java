@@ -105,6 +105,11 @@ public class WebPanel {
     private final java.util.Set<java.util.UUID> frozenPlayers = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final java.util.Set<java.util.UUID> mutedPlayers = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
+    private final java.util.concurrent.ConcurrentLinkedDeque<String> consoleLines = new java.util.concurrent.ConcurrentLinkedDeque<>();
+    private final java.util.List<SseClient> consoleClients = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private java.util.logging.Handler consoleHandler;
+    private static final int MAX_CONSOLE_LINES = 500;
+
     public WebPanel(NexusSecurity plugin) {
         this.plugin = plugin;
     }
@@ -140,6 +145,19 @@ public class WebPanel {
             };
             plugin.getAlertSystem().subscribe(sseConsumer);
             try { Bukkit.getPluginManager().registerEvents(new WebPanelListener(), plugin); } catch (Exception ignored) {}
+            this.consoleHandler = new java.util.logging.Handler() {
+                @Override
+                public void publish(java.util.logging.LogRecord record) {
+                    String line = "[" + record.getLevel().getName() + "] " + record.getMessage();
+                    consoleLines.addLast(line);
+                    while (consoleLines.size() > MAX_CONSOLE_LINES) consoleLines.pollFirst();
+                    String data = "data: " + gson.toJson(java.util.Map.of("line", line)) + "\n\n";
+                    for (SseClient c : consoleClients) c.send(data);
+                }
+                @Override public void flush() {}
+                @Override public void close() throws SecurityException {}
+            };
+            try { Bukkit.getServer().getLogger().addHandler(consoleHandler); } catch (Exception ignored) {}
         } catch (Exception e) {
             plugin.getLogger().severe("[WebPanel] No se pudo iniciar: " + e.getMessage());
         }
@@ -150,6 +168,12 @@ public class WebPanel {
             plugin.getAlertSystem().unsubscribe(sseConsumer);
             sseConsumer = null;
         }
+        if (consoleHandler != null) {
+            try { Bukkit.getServer().getLogger().removeHandler(consoleHandler); } catch (Exception ignored) {}
+            consoleHandler = null;
+        }
+        for (SseClient c : consoleClients) c.close();
+        consoleClients.clear();
         for (SseClient c : sseClients) c.close();
         sseClients.clear();
         if (server != null) {
@@ -350,9 +374,11 @@ public class WebPanel {
                 return;
             }
 
+            if (path.equals("/api/metrics")) { sendMetrics(ex); return; }
             if (path.startsWith("/api/")) { handleApi(ex, path); return; }
             if (path.startsWith("/frag/")) { handleFragment(ex, path, token); return; }
             if (path.equals("/events/stream")) { handleSse(ex); return; }
+            if (path.equals("/console/stream")) { handleConsoleSse(ex); return; }
             if (path.equals("/action") && method.equalsIgnoreCase("POST")) { handleAction(ex, token); return; }
 
             // Authenticated pages
@@ -366,6 +392,8 @@ public class WebPanel {
                 case "/suspects" -> sendHtml(ex, renderSuspects(ex), "text/html");
                 case "/backups" -> sendHtml(ex, renderBackups(ex), "text/html");
                 case "/settings" -> sendHtml(ex, renderSettings(ex), "text/html");
+                case "/console" -> sendHtml(ex, renderConsole(ex), "text/html");
+                case "/config" -> sendHtml(ex, renderConfig(ex), "text/html");
                 default -> sendHtml(ex, page("No encontrado", nav(token) + "<p class='muted'>404</p>", token), "text/html");
             }
         } catch (Exception e) {
@@ -378,14 +406,21 @@ public class WebPanel {
         if (path.equals("/api/status")) {
             sendJson(ex, gson.toJson(buildStatusJson()));
         } else if (path.equals("/api/players")) {
-            sendJson(ex, gson.toJson(buildPlayersJson()));
-        } else if (path.equals("/api/events.csv")) {
-            sendCsv(ex, eventsCsv());
-        } else if (path.equals("/api/audit.csv")) {
-            sendCsv(ex, auditCsv(parseParams(ex.getRequestURI().getQuery())));
-        } else {
-            sendJson(ex, gson.toJson(tree("error", "unknown")));
-        }
+        sendJson(ex, gson.toJson(buildPlayersJson()));
+    } else if (path.equals("/api/events.csv")) {
+        sendCsv(ex, eventsCsv());
+    } else if (path.equals("/api/audit.csv")) {
+        sendCsv(ex, auditCsv(parseParams(ex.getRequestURI().getQuery())));
+    } else {
+        sendJson(ex, gson.toJson(tree("error", "unknown")));
+    }
+}
+
+    private void sendMetrics(HttpExchange ex) throws IOException {
+        ex.getResponseHeaders().add("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+        byte[] body = buildMetricsText().getBytes(StandardCharsets.UTF_8);
+        ex.sendResponseHeaders(200, body.length);
+        try (OutputStream os = ex.getResponseBody()) { os.write(body); }
     }
 
     private void handleFragment(HttpExchange ex, String path, String token) throws IOException {
@@ -419,6 +454,33 @@ public class WebPanel {
         } catch (Exception ignored) {
         } finally {
             sseClients.remove(client);
+            client.close();
+        }
+    }
+
+    /** Live console stream (server log tail). */
+    private void handleConsoleSse(HttpExchange ex) throws IOException {
+        ex.getResponseHeaders().add("Content-Type", "text/event-stream; charset=utf-8");
+        ex.getResponseHeaders().add("Cache-Control", "no-cache");
+        ex.getResponseHeaders().add("Connection", "keep-alive");
+        ex.sendResponseHeaders(200, 0);
+        OutputStream os = ex.getResponseBody();
+        SseClient client = new SseClient(os);
+        consoleClients.add(client);
+        try {
+            for (String l : consoleLines) {
+                client.send("data: " + gson.toJson(java.util.Map.of("line", l)) + "\n\n");
+            }
+            client.send(": connected\n\n");
+            while (!client.isClosed()) {
+                Thread.sleep(15000);
+                client.send(": ping\n\n");
+            }
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        } catch (Exception ignored) {
+        } finally {
+            consoleClients.remove(client);
             client.close();
         }
     }
@@ -528,8 +590,9 @@ public class WebPanel {
         return "<nav><a href='/dashboard'>Dashboard</a><a href='/players'>Jugadores</a>" +
                 "<a href='/suspects'>Sospechosos</a><a href='/blacklist'>Blacklist IP</a>" +
                 "<a href='/backups'>Backups</a><a href='/audit'>Auditoría</a><a href='/events'>Eventos</a>" +
-                "<a href='/settings'>Ajustes</a>" +
+                "<a href='/settings'>Ajustes</a><a href='/console'>Consola</a><a href='/config'>Config</a>" +
                 "<span class='right'>" + planBadge + "</span>" +
+                "<a class='right' href='javascript:toggleTheme()' title='Cambiar tema'>🌓</a>" +
                 "<a class='right' href='/logout'>Salir</a></nav>";
     }
 
@@ -538,7 +601,11 @@ public class WebPanel {
                 "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
                 "<title>NexusSecurity — " + escapeHtml(title) + "</title>" + style() +
                 "</head><body>" + nav(token) + "<div class='wrap'>" + body + "</div>" +
-                "<footer class='muted'>NexusSecurity " + plugin.getDescription().getVersion() + " · Panel embebido</footer></body></html>";
+                "<footer class='muted'>NexusSecurity " + plugin.getDescription().getVersion() + " · Panel embebido</footer>" +
+                "<script>function toggleTheme(){var l=document.body.classList.toggle('light');" +
+                "document.cookie='nx_theme='+(l?'light':'dark')+';Path=/;Max-Age=31536000';}" +
+                "try{var t=document.cookie.match(/nx_theme=(light|dark)/);if(t&&t[1]==='light')document.body.classList.add('light');}catch(e){}" +
+                "</script></body></html>";
     }
 
     private String renderDashboard(HttpExchange ex) {
@@ -787,9 +854,12 @@ public class WebPanel {
                 "'<td>'+(d.module||'')+'</td><td>'+(d.message||'')+'</td><td class=\"mono small\">'+(d.source||'—')+'</td>';" +
                 "t.insertBefore(tr, t.firstChild);" +
                 "while(t.children.length>200) t.removeChild(t.lastChild);}" +
-                "if(nx_es){nx_es.onmessage=function(e){try{var d=JSON.parse(e.data); nx_addRow(d);}catch(_){}};" +
+                "if(nx_es){nx_es.onmessage=function(e){try{var d=JSON.parse(e.data); nx_addRow(d);" +
+                "if((d.severity||'').toLowerCase()==='critical'){nx_toast('🚨 '+ (d.module||'')+': '+(d.message||''));}}catch(_){}};" +
                 "nx_es.onerror=function(){nx_es.close(); nx_es=null;};}" +
                 "if(!nx_es){setInterval(function(){fetch('/frag/events').then(r=>r.text()).then(h=>{var el=document.getElementById('live'); if(el) el.innerHTML=h;}).catch(function(){});},10000);}" +
+                "function nx_toast(msg){try{var t=document.createElement('div'); t.className='toast'; t.textContent=msg;" +
+                "document.body.appendChild(t); setTimeout(function(){t.remove();},6000);}catch(_){}}" +
                 "</script>");
         return page("Eventos", b.toString(), token);
     }
@@ -953,6 +1023,53 @@ public class WebPanel {
         return page("Ajustes", b.toString(), token);
     }
 
+    private String renderConsole(HttpExchange ex) {
+        String token = getSessionToken(ex);
+        Map<String, String> q = parseParams(ex.getRequestURI().getQuery());
+        StringBuilder b = new StringBuilder();
+        b.append("<header class='page'><h1>🖥️ Consola del servidor</h1>");
+        if ("1".equals(q.get("ok"))) b.append("<div class='premiumok'>Comando enviado.</div>");
+        b.append("</header>");
+        b.append("<div class='card'><form method='post' action='/action' class='col'>");
+        b.append(hidden("action", "run-command"));
+        b.append("<input type='text' name='command' placeholder='Ej. ban Notch hacks' autofocus>");
+        b.append("<button class='btn'>Ejecutar</button></form>");
+        b.append("<p class='muted small'>Se ejecuta como consola del servidor (rol admin). Usa con cuidado.</p></div>");
+        b.append("<div class='card'><pre id='console' class='console'></pre></div>");
+        b.append("<script>");
+
+        b.append("var es = new EventSource('/console/stream');");
+        b.append("var box = document.getElementById('console');");
+        b.append("es.onmessage = function(e){ try { var o = JSON.parse(e.data); if (o.line) {");
+        b.append("box.textContent += o.line + '\\n'; box.scrollTop = box.scrollHeight;");
+        b.append("} } catch(_){} };");
+        b.append("es.onerror = function(){ setTimeout(function(){ location.reload(); }, 5000); };");
+        b.append("</script>");
+        return page("Consola", b.toString(), token);
+    }
+
+    private String renderConfig(HttpExchange ex) {
+        String token = getSessionToken(ex);
+        Map<String, String> q = parseParams(ex.getRequestURI().getQuery());
+        StringBuilder b = new StringBuilder();
+        b.append("<header class='page'><h1>⚙️ Configuración (config.yml)</h1>");
+        if ("1".equals(q.get("ok"))) b.append("<div class='premiumok'>Guardado. Algunos módulos pueden requerir /security reload.</div>");
+        b.append("</header>");
+        b.append("<div class='card'><form method='post' action='/action' class='col'>");
+        b.append(hidden("action", "save-config"));
+        String content = "";
+        try {
+            java.io.File cfgFile = new java.io.File(plugin.getDataFolder(), "config.yml");
+            content = java.nio.file.Files.readString(cfgFile.toPath(), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            content = "# No se pudo leer config.yml: " + escapeHtml(e.getMessage());
+        }
+        b.append("<textarea name='yaml' rows='28'>").append(escapeHtml(content)).append("</textarea>");
+        b.append("<button class='btn'>Guardar y recargar</button></form>");
+        b.append("<p class='muted small'>Editar aquí equivale a editar config.yml. Se recarga la config del plugin automáticamente.</p></div>");
+        return page("Config", b.toString(), token);
+    }
+
     private String renderBackups(HttpExchange ex) {
         String token = getSessionToken(ex);
         StringBuilder b = new StringBuilder();
@@ -995,7 +1112,8 @@ public class WebPanel {
 
         boolean needsSub = action != null && Set.of("enable", "disable", "scan", "backup",
                 "kick", "ban", "tempban", "warn", "add-ip", "unban-ip", "emergency",
-                "restore-backup", "freeze", "unfreeze", "mute", "unmute").contains(action);
+                "restore-backup", "freeze", "unfreeze", "mute", "unmute",
+                "run-command", "save-config").contains(action);
 
         if (needsSub && !sub.isSubscriptionActive()) {
             sendHtml(ex, page("Bloqueado", nav(token) + "<div class='banner'>Esta función requiere una suscripción activa.</div>", token), "text/html");
@@ -1073,6 +1191,30 @@ public class WebPanel {
                     sendRedirect(ex, "/settings?ok=1");
                 }
             }
+            case "run-command" -> {
+                String cmd = p.getOrDefault("command", "").trim();
+                String actor = sessions.getOrDefault(token, "admin");
+                if (!cmd.isEmpty()) {
+                    Bukkit.getScheduler().runTask(plugin, () -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
+                    plugin.getAlertSystem().info("web-panel", actor, "Comando ejecutado desde el panel: " + cmd);
+                }
+                sendRedirect(ex, "/console?ok=1");
+            }
+            case "save-config" -> {
+                String yaml = p.getOrDefault("yaml", "");
+                String actor = sessions.getOrDefault(token, "admin");
+                try {
+                    java.io.File cfgFile = new java.io.File(plugin.getDataFolder(), "config.yml");
+                    try (java.io.FileWriter w = new java.io.FileWriter(cfgFile)) { w.write(yaml); }
+                    plugin.reloadConfig();
+                    loadConfig();
+                    plugin.getAlertSystem().info("web-panel", actor, "Configuración guardada desde el panel");
+                    sendRedirect(ex, "/config?ok=1");
+                } catch (Exception ex2) {
+                    sendHtml(ex, page("Error", nav(token) + "<div class='banner'>No se pudo escribir: "
+                            + escapeHtml(ex2.getMessage()) + "</div>", token), "text/html");
+                }
+            }
             default -> { /* ignore */ }
         }
         sendRedirect(ex, refererOrDashboard(ex));
@@ -1147,6 +1289,53 @@ public class WebPanel {
         srv.addProperty("health", toInt(ss.get("health")));
         o.add("server", srv);
         return o;
+    }
+
+    private String buildMetricsText() {
+        var pm = plugin.getPerformanceMonitor();
+        var mm = plugin.getModuleManager();
+        Map<String, Object> ss = collectServerStats();
+        StringBuilder m = new StringBuilder();
+        m.append("# HELP nexussecurity_tps Ticks per second (20 = perfecto).\n").append("# TYPE nexussecurity_tps gauge\n")
+                .append("nexussecurity_tps ").append(pm.getCurrentTps()).append("\n");
+        m.append("# HELP nexussecurity_cpu_percent Uso de CPU del proceso (0-100).\n").append("# TYPE nexussecurity_cpu_percent gauge\n")
+                .append("nexussecurity_cpu_percent ").append(pm.getCpuUsagePercent()).append("\n");
+        m.append("# HELP nexussecurity_ram_used_mb RAM usada por la JVM.\n").append("# TYPE nexussecurity_ram_used_mb gauge\n")
+                .append("nexussecurity_ram_used_mb ").append(pm.getUsedRamMb()).append("\n");
+        m.append("# HELP nexussecurity_ram_total_mb RAM total de la JVM.\n").append("# TYPE nexussecurity_ram_total_mb gauge\n")
+                .append("nexussecurity_ram_total_mb ").append(pm.getTotalRamMb()).append("\n");
+        m.append("# HELP nexussecurity_players_online Jugadores conectados.\n").append("# TYPE nexussecurity_players_online gauge\n")
+                .append("nexussecurity_players_online ").append(collectOnlinePlayers().size()).append("\n");
+        m.append("# HELP nexussecurity_modules_active Módulos activos.\n").append("# TYPE nexussecurity_modules_active gauge\n")
+                .append("nexussecurity_modules_active ").append(mm.getActiveModuleCount()).append("\n");
+        m.append("# HELP nexussecurity_modules_total Módulos totales.\n").append("# TYPE nexussecurity_modules_total gauge\n")
+                .append("nexussecurity_modules_total ").append(mm.getTotalModuleCount()).append("\n");
+        m.append("# HELP nexussecurity_disk_used_bytes Espacio en disco usado.\n").append("# TYPE nexussecurity_disk_used_bytes gauge\n")
+                .append("nexussecurity_disk_used_bytes ").append(toLong(ss.get("diskUsed"))).append("\n");
+        m.append("# HELP nexussecurity_disk_total_bytes Espacio en disco total.\n").append("# TYPE nexussecurity_disk_total_bytes gauge\n")
+                .append("nexussecurity_disk_total_bytes ").append(toLong(ss.get("diskTotal"))).append("\n");
+        m.append("# HELP nexussecurity_entities Entidades cargadas.\n").append("# TYPE nexussecurity_entities gauge\n")
+                .append("nexussecurity_entities ").append(toInt(ss.get("entities"))).append("\n");
+        m.append("# HELP nexussecurity_chunks Chunks cargados.\n").append("# TYPE nexussecurity_chunks gauge\n")
+                .append("nexussecurity_chunks ").append(toInt(ss.get("chunks"))).append("\n");
+        m.append("# HELP nexussecurity_worlds Mundos cargados.\n").append("# TYPE nexussecurity_worlds gauge\n")
+                .append("nexussecurity_worlds ").append(toInt(ss.get("worlds"))).append("\n");
+        m.append("# HELP nexussecurity_health Índice de salud (0-100).\n").append("# TYPE nexussecurity_health gauge\n")
+                .append("nexussecurity_health ").append(toInt(ss.get("health"))).append("\n");
+        m.append("# HELP nexussecurity_uptime_seconds Tiempo activo.\n").append("# TYPE nexussecurity_uptime_seconds counter\n")
+                .append("nexussecurity_uptime_seconds ").append(toLong(ss.get("uptime"))).append("\n");
+        long gcCount = 0, gcTime = 0;
+        for (java.lang.management.GarbageCollectorMXBean gc : java.lang.management.ManagementFactory.getGarbageCollectorMXBeans()) {
+            gcCount += gc.getCollectionCount();
+            gcTime += gc.getCollectionTime();
+        }
+        m.append("# HELP nexussecurity_jvm_gc_collections Total de colecciones GC.\n").append("# TYPE nexussecurity_jvm_gc_collections counter\n")
+                .append("nexussecurity_jvm_gc_collections ").append(gcCount).append("\n");
+        m.append("# HELP nexussecurity_jvm_gc_time_ms Tiempo total en GC (ms).\n").append("# TYPE nexussecurity_jvm_gc_time_ms counter\n")
+                .append("nexussecurity_jvm_gc_time_ms ").append(gcTime).append("\n");
+        m.append("# HELP nexussecurity_jvm_threads Hilos activos de la JVM.\n").append("# TYPE nexussecurity_jvm_threads gauge\n")
+                .append("nexussecurity_jvm_threads ").append(java.lang.management.ManagementFactory.getThreadMXBean().getThreadCount()).append("\n");
+        return m.toString();
     }
 
     private JsonObject buildPlayersJson() {
@@ -1459,74 +1648,15 @@ public class WebPanel {
     // ============================================================
 
     private String hash(String s) {
-        try {
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] d = md.digest(s.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte x : d) sb.append(String.format("%02x", x));
-            return sb.toString();
-        } catch (Exception e) {
-            return "";
-        }
+        return nx.zsanchez.nexussecurity.util.CryptoUtil.hash(s);
     }
 
-    private static final String B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-
     private String generateBase32Secret(int bytes) {
-        byte[] r = new byte[bytes];
-        new java.security.SecureRandom().nextBytes(r);
-        return base32Encode(r);
+        return nx.zsanchez.nexussecurity.util.CryptoUtil.randomBase32Secret(bytes);
     }
 
     private boolean verifyTotp(String code) {
-        if (totpSecret == null || totpSecret.isEmpty() || code == null || code.isEmpty()) return false;
-        try {
-            byte[] key = base32Decode(totpSecret);
-            long counter = System.currentTimeMillis() / 30000L;
-            String cur = String.format("%06d", totp(key, counter));
-            String prev = String.format("%06d", totp(key, counter - 1));
-            String nxt = String.format("%06d", totp(key, counter + 1));
-            return java.util.Arrays.equals(code.getBytes(), cur.getBytes())
-                    || java.util.Arrays.equals(code.getBytes(), prev.getBytes())
-                    || java.util.Arrays.equals(code.getBytes(), nxt.getBytes());
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    private int totp(byte[] key, long counter) throws Exception {
-        byte[] msg = new byte[8];
-        for (int i = 7; i >= 0; i--) { msg[i] = (byte) (counter & 0xff); counter >>= 8; }
-        javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA1");
-        mac.init(new javax.crypto.spec.SecretKeySpec(key, "HmacSHA1"));
-        byte[] h = mac.doFinal(msg);
-        int off = h[h.length - 1] & 0xf;
-        int bin = ((h[off] & 0x7f) << 24) | ((h[off + 1] & 0xff) << 16) | ((h[off + 2] & 0xff) << 8) | (h[off + 3] & 0xff);
-        return bin % 1000000;
-    }
-
-    private String base32Encode(byte[] data) {
-        StringBuilder sb = new StringBuilder();
-        int bits = 0, value = 0;
-        for (byte b : data) {
-            value = (value << 8) | (b & 0xff); bits += 8;
-            while (bits >= 5) { sb.append(B32.charAt((value >>> (bits - 5)) & 0x1f)); bits -= 5; }
-        }
-        if (bits > 0) sb.append(B32.charAt((value << (5 - bits)) & 0x1f));
-        return sb.toString();
-    }
-
-    private byte[] base32Decode(String s) {
-        s = s.replace("=", "").toUpperCase();
-        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-        int bits = 0, value = 0;
-        for (int i = 0; i < s.length(); i++) {
-            int idx = B32.indexOf(s.charAt(i));
-            if (idx < 0) continue;
-            value = (value << 5) | idx; bits += 5;
-            if (bits >= 8) { out.write((value >>> (bits - 8)) & 0xff); bits -= 8; }
-        }
-        return out.toByteArray();
+        return nx.zsanchez.nexussecurity.util.CryptoUtil.verifyTotp(totpSecret, code);
     }
 
     private String style() {
@@ -1566,6 +1696,12 @@ public class WebPanel {
                 ".kv{display:grid;grid-template-columns:1fr 1fr;gap:2px 18px}.kvrow{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1c2029;font-size:13px}.kvrow span{color:#7c8aa0}.health{margin-top:10px;font-size:13px}.health .bar{margin-top:5px;height:10px}" +
                 ".row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.col{display:flex;flex-direction:column;gap:8px;max-width:320px}" +
                 "input,select,textarea{background:#0f1117;color:#e6edf6;border:1px solid #232733;border-radius:7px;padding:8px 10px;font-size:13px}" +
+                "pre.console{background:#000;color:#b7f7c8;max-height:60vh;overflow:auto;padding:10px;border-radius:8px;font-size:12px;white-space:pre-wrap;word-break:break-word}" +
+                ".toast{position:fixed;right:16px;bottom:16px;background:#7f1d1d;color:#fff;padding:10px 14px;border-radius:8px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.4);z-index:99;animation:nxpop .2s ease}" +
+                "@keyframes nxpop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}" +
+                "body.light{background:#eef1f6;color:#111827}body.light .card,body.light nav,body.light .login,body.light .wrap{background:#fff;color:#111827;border-color:#d7dde6}" +
+                "body.light nav a,body.light .plan{color:#334155}body.light pre.console{background:#0b0f0a;color:#b7f7c8}" +
+                "body.light input,body.light select,body.light textarea{background:#f8fafc;color:#111827;border-color:#cbd5e1}" +
                 "@media (max-width:720px){.kv{grid-template-columns:1fr}nav{flex-wrap:wrap}.cards{grid-template-columns:1fr 1fr}.container{width:100%}}" +
                 "@media (max-width:480px){.cards{grid-template-columns:1fr}nav a{padding:6px 8px}}" +
                 "</style>";

@@ -1,7 +1,7 @@
 # ==============================================================================
 #                     NexusSecurity — Configuración Principal
 #              Plugin Profesional de Seguridad Multicapa para Minecraft
-#                            Versión: 1.1.4
+#                            Versión: 1.1.5
 # ==============================================================================
 # INSTRUCCIONES:
 #   1. Introduce tu clave API en el campo 'api-key' para activar todas las funciones.
@@ -209,6 +209,15 @@ modules:
     enabled: true
     # Intervalo en minutos para escaneo automático de archivos
     scan-interval-minutes: 60
+    # Anti-bot / detección de join-flood por IP
+    anti-bot:
+      enabled: true
+      # Ventana en segundos para contar joins desde la misma IP
+      window-seconds: 10
+      # Máximo de joins permitidos por IP en la ventana antes de marcar como bot
+      max-joins-per-ip: 5
+      # Expulsar al IP sospechoso al superar el límite
+      kick: true
     # Directorios a monitorizar (relativos a la raíz del servidor)
     monitored-directories:
       - "plugins"
@@ -287,6 +296,11 @@ modules:
     incremental: true
     # Cada cuántos backups se fuerza un FULL (los incrementales dependen del último FULL)
     full-backup-every: 7
+    # Subida offsite tras cada backup. Usa %FILE% como ruta absoluta del archivo.
+    # Ejemplos: "rclone copy %FILE% remote:nexus-backups/" o "aws s3 cp %FILE% s3://bucket/backups/"
+    # Dejar vacío para desactivar. Cada archivo también guarda un <archivo>.sha256 de integridad.
+    offsite:
+      command: ""
     # Directorios a incluir en el backup
     include-dirs:
       - "world"
@@ -540,6 +554,24 @@ notifications:
     token: ""
     # ID del chat de destino
     chat-id: ""
+  slack:
+    # Webhook de Slack (dejar vacío para desactivar)
+    webhook-url: ""
+  webhook:
+    # Webhook genérico (POST JSON con module/severity/source/message)
+    url: ""
+  pushover:
+    # Token de aplicación y usuario de Pushover (dejar vacíos para desactivar)
+    token: ""
+    user: ""
+  smtp:
+    # Correo SMTP (STARTTLS + AUTH LOGIN). Dejar vacío para desactivar.
+    host: ""
+    port: 587
+    user: ""
+    password: ""
+    from: "nexussecurity@localhost"
+    to: ""
 
 # ------------------------------------------------------------------------------
 # SECCIÓN: IDIOMA Y MENSAJES

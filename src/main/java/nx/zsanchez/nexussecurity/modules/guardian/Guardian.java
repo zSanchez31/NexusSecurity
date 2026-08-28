@@ -3,7 +3,15 @@ package nx.zsanchez.nexussecurity.modules.guardian;
 import nx.zsanchez.nexussecurity.NexusSecurity;
 import nx.zsanchez.nexussecurity.core.*;
 
+import org.bukkit.event.Listener;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.player.PlayerJoinEvent;
+
+import java.net.InetAddress;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -28,6 +36,13 @@ public class Guardian implements SecurityModule {
     private boolean enabled = false;
     private ScheduledFuture<?> scanTask;
     private int scanIntervalMinutes;
+
+    private boolean antiBotEnabled;
+    private int botWindowSeconds;
+    private int botMaxJoinsPerIp;
+    private boolean botKick;
+    private final Map<InetAddress, Deque<Long>> joinTimes = new ConcurrentHashMap<>();
+    private BotListener botListener;
 
     public Guardian(NexusSecurity plugin, CacheManager cacheManager, DatabaseManager databaseManager,
                     AlertSystem alertSystem, ThreadPoolManager threadPoolManager) {
@@ -55,6 +70,11 @@ public class Guardian implements SecurityModule {
 
         enabled = true;
 
+        if (antiBotEnabled) {
+            this.botListener = new BotListener();
+            try { org.bukkit.Bukkit.getPluginManager().registerEvents(botListener, plugin); } catch (Exception ignored) {}
+        }
+
         // Generate initial baseline asynchronously
         threadPoolManager.submit("GuardianBaseline", () -> integrityHasher.generateBaseline());
 
@@ -76,6 +96,7 @@ public class Guardian implements SecurityModule {
         if (scanTask != null && !scanTask.isCancelled()) {
             scanTask.cancel(false);
         }
+        if (botListener != null) botListener.active = false;
         enabled = false;
         logger.info("[Guardian] Module disabled.");
     }
@@ -85,6 +106,41 @@ public class Guardian implements SecurityModule {
 
     private void loadConfig() {
         this.scanIntervalMinutes = plugin.getConfig().getInt("modules.guardian.scan-interval-minutes", 60);
+        this.antiBotEnabled = plugin.getConfig().getBoolean("modules.guardian.anti-bot.enabled", true);
+        this.botWindowSeconds = Math.max(1, plugin.getConfig().getInt("modules.guardian.anti-bot.window-seconds", 10));
+        this.botMaxJoinsPerIp = Math.max(2, plugin.getConfig().getInt("modules.guardian.anti-bot.max-joins-per-ip", 5));
+        this.botKick = plugin.getConfig().getBoolean("modules.guardian.anti-bot.kick", true);
+    }
+
+    /**
+     * Detects bot/join-flood patterns: too many joins from the same IP in a short window.
+     */
+    private class BotListener implements Listener {
+        private volatile boolean active = true;
+        @EventHandler
+        public void onJoin(PlayerJoinEvent event) {
+            if (!active) return;
+            InetAddress ip = event.getPlayer().getAddress() != null
+                    ? event.getPlayer().getAddress().getAddress() : null;
+            if (ip == null) return;
+            long now = System.currentTimeMillis();
+            Deque<Long> times = joinTimes.computeIfAbsent(ip, k -> new ArrayDeque<>());
+            synchronized (times) {
+                times.addLast(now);
+                while (!times.isEmpty() && now - times.peekFirst() > botWindowSeconds * 1000L) {
+                    times.pollFirst();
+                }
+                if (times.size() > botMaxJoinsPerIp) {
+                    alertSystem.warning("Guardian", ip.getHostAddress(),
+                            "Posible bot/join-flood: " + times.size() + " joins desde " + ip.getHostAddress()
+                                    + " en " + botWindowSeconds + "s");
+                    if (botKick && event.getPlayer().isOnline()) {
+                        event.getPlayer().kickPlayer("§cConexión bloqueada por posible bot (join-flood).");
+                    }
+                    times.clear();
+                }
+            }
+        }
     }
 
     /**

@@ -4,7 +4,7 @@ Plugin de seguridad todo‑en‑uno para servidores **Minecraft Paper** (1.21+),
 Protege tu servidor con 11 módulos, un **panel web embebido**, auditoría, copias de seguridad y
 notificaciones externas (Discord / Telegram).
 
-> Versión: **1.1.5**
+> Versión: **1.1.6**
 
 ---
 
@@ -209,7 +209,7 @@ Los envíos se hacen fuera del hilo principal (thread pool) para no bloquear el 
 | Autopilot | Respuesta automática / modo de emergencia |
 | HackDetector | Detección de clientes ilegales (hacks) |
 
-**Novedades por módulo (v1.1.5):**
+**Novedades por módulo (v1.1.6):**
 
 - **Guardian** incluye ahora **anti-bot / detección de join-flood** por IP
   (`modules.guardian.anti-bot.*`): si una misma IP supera `max-joins-per-ip` en `window-seconds`,
@@ -236,7 +236,7 @@ Los envíos se hacen fuera del hilo principal (thread pool) para no bloquear el 
 ## Descarga (Release / JAR)
 
 La última versión compilada está en **[Releases](https://github.com/zSanchez31/NexusSecurity/releases)**:
-descarga `NexusSecurity-1.1.5.jar` y súbelo a `plugins/`.
+descarga `NexusSecurity-1.1.6.jar` y súbelo a `plugins/`.
 
 > El JAR de la release es *shaded*: incluye todas las dependencias (Gson, etc.) y está
 > relocalizado a `nx.zsanchez.nexussecurity.libs.*` para evitar conflictos.
